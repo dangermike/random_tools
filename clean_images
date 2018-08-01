@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+# A little tool to clean up all the old Docker images
+# Most of the complexity comes from having to understand versioning in the tags
+# Note that only the latest tagged version for each repo is kept. This utility
+# is not aware of multiple tags for the same version, so be careful!
+
 import subprocess
 try:
     import ujson as json
