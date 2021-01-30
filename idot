@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+# stolen in part from https://twitter.com/thingskatedid/status/1316074032379248640
+
+set -euo pipefail
+
+if [ -t 0 ]; then
+    has_stdin=f
+else
+    has_stdin=t
+fi
+
+FG=ghostwhite
+BG=transparent
+
+# Look for command line flags.
+while [ $# -gt 0 ]; do
+    case "$1" in
+    *)
+        if [ -r "$1" ]; then
+            has_stdin=f
+            dot \
+                -Gbgcolor=$BG \
+                -Gcolor=$BG \
+                -Gbackground=$BG \
+                -Ncolor=$FG \
+                -Ecolor=$FG \
+                -Efontcolor=$FG \
+                -Nfontcolor=$FG \
+                -Tsvg "$1" | \
+            rsvg-convert -z 3 | \
+            imgcat
+        else
+            error "idot: $1: No such file or directory"
+            exit 2
+        fi
+        ;;
+    esac
+    shift
+done
+
+# Read and print stdin
+if [ $has_stdin = t ]; then
+    dot \
+        -Gbgcolor=$BG \
+        -Gcolor=$BG \
+        -Gbackground=$BG \
+        -Ncolor=$FG \
+        -Ecolor=$FG \
+        -Efontcolor=$FG \
+        -Nfontcolor=$FG \
+        -Tsvg | \
+    rsvg-convert -z 3 | \
+    imgcat
+fi
+
+exit 0
