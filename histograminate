@@ -3,15 +3,53 @@
 import sys
 import numpy
 
-bin_funcs = {'auto', 'fd', 'doane', 'scott', 'rice', 'sturges', 'sqrt'}
-nums = []
+from typing import List, Set, Union
 
-bins = 'auto'
+bin_funcs: Set[str] = {
+    'auto', 'fd', 'doane', 'scott', 'rice', 'sturges', 'sqrt'
+}
+nums: List[float] = []
+
+bins: Union[int, str] = 'auto'
 density = False
 cumulative = False
 
+
+def hist(nums: List[float]):
+    h = numpy.histogram(nums, bins=bins, density=density)
+
+    scale = 1
+
+    # the density is a probability function, not a probability mass function, so we
+    # have to multiply by the bin width to normalize to 1
+    # https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.histogram.html
+    if density:
+        scale = h[1][1] - h[1][0]
+
+    if cumulative:
+        s = 0
+        for x in range(len(h[0])):
+            s += (h[0][x] * scale)
+            print("%f\t%f" % (h[1][x], s))
+    else:
+        for x in range(len(h[0])):
+            print("%f\t%f" % (h[1][x], h[0][x] * scale))
+
+
+def summarize(nums: List[float]):
+    bins: List[float] = [0.0, 25.0, 50.0, 75.0, 90.0, 95.0, 99.0, 99.9, 100.0]
+    percentiles = numpy.percentile(nums, bins)
+    for b, p in zip(bins, percentiles):
+        print("{: 6}:{: 5}".format(b, p))
+    print(" count: {}".format(len(nums)))
+
+
+handler = hist
+
 for f in sys.argv[1:]:
-    if f == "-n" or f == "--normalized":
+    if f == "-s" or f == "--stats":
+        handler = summarize
+    elif f == "-n" or f == "--normalized":
         density = True
     elif f == "-c" or f == "--cumulative":
         cumulative = True
@@ -33,21 +71,4 @@ for line in sys.stdin:
     except ValueError:
         pass
 
-h = numpy.histogram(nums, bins=bins, density=density)
-
-scale = 1
-
-# the density is a probability function, not a probability mass function, so we
-# have to multiply by the bin width to normalize to 1
-# https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.histogram.html
-if density:
-    scale = h[1][1] - h[1][0]
-
-if cumulative:
-    s = 0
-    for x in range(len(h[0])):
-        s += (h[0][x] * scale)
-        print("%f\t%f" % (h[1][x], s))
-else:
-    for x in range(len(h[0])):
-        print("%f\t%f" % (h[1][x], h[0][x] * scale))
+handler(nums)
