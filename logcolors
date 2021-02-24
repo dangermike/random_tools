@@ -1,0 +1,4 @@
+rg --color always --colors match:fg:green "INFO|$" \
+| rg --color always --colors match:fg:yellow "WARN(ING)?|$" \
+| rg --color always --colors match:fg:red "ERR(OR)?|$" \
+| rg --color always --colors match:fg:blue "DEBUG?|$"
