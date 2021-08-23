@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 
-suffix=$(echo "${1}" | xxh32sum | cut -d ' ' -f 1)
+if [[ ! -x $(which re) ]]; then
+	1>&2 echo "required application 're' not found"
+	1>&2 echo "compile and install from https://github.com/katef/libfsm/"
+	exit 1
+fi
+if [[ ! -x $(which kgt) ]]; then
+	1>&2 echo "required application 'kgt' not found"
+	1>&2 echo "compile and install from https://github.com/katef/kgt/"
+	exit 1
+fi
+if [[ ! -x $(which md5) ]]; then
+	1>&2 echo "required application 'md5' not found"
+	exit 1
+fi
+
+suffix=$(echo "${1}" | md5)
 
 re -r pcre -bpl abnf "${1}" | kgt -l abnf -e svg > "${TMPDIR}/regexp_railroad_${suffix}.svg"
 open -a "/Applications/Google Chrome.app" "${TMPDIR}/regexp_railroad_${suffix}.svg"
