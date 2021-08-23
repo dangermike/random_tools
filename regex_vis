@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+suffix=$(echo "${1}" | xxh32sum | cut -d ' ' -f 1)
+
+re -r pcre -bpl abnf "${1}" | kgt -l abnf -e svg > "${TMPDIR}/regexp_railroad_${suffix}.svg"
+open -a "/Applications/Google Chrome.app" "${TMPDIR}/regexp_railroad_${suffix}.svg"
+sleep 2
+rm "${TMPDIR}/regexp_railroad_${suffix}.svg"
