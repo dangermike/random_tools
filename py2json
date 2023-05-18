@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+
+# Reads python from stdin and attempts to print it as JSON
+
+import ast
+import sys
+
+try:
+    import ujson as json
+except ImportError:
+    import json
+
+def txt2json(txt:str):
+    data = ast.literal_eval(txt)
+    json.dump(data, sys.stdout, indent=2, sort_keys=True)
+    print()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        for p in sys.argv[1:]:
+            with open(p) as f:
+                txt2json(f.read())
+    else:
+        txt2json(sys.stdin.read())
