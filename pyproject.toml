@@ -1,0 +1,14 @@
+[project]
+name = "random_tools"
+requires-python = ">=3.12"
+version = "0.0.1"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "ujson",
+    "pyyaml",
+]
+
+[tool.ruff]
+# Set the maximum line length to 100 characters
+line-length = 150

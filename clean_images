@@ -1,4 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["ujson"]
+# ///
+
 
 # A little tool to clean up all the old Docker images
 # Most of the complexity comes from having to understand versioning in the tags
@@ -6,6 +11,7 @@
 # is not aware of multiple tags for the same version, so be careful!
 
 import subprocess
+
 try:
     import ujson as json
 except ImportError:
@@ -14,14 +20,14 @@ except ImportError:
 
 def split_element(e):
     if e.isdigit():
-        return (int(e), '')
+        return (int(e), "")
     if type(e) is int:
-        return (e, '')
+        return (e, "")
     if not isinstance(e, str):
-        raise ValueError('Provided value neither integer nor string')
+        raise ValueError("Provided value neither integer nor string")
 
-    if '-' in e:
-        s = e.split('-', 1)
+    if "-" in e:
+        s = e.split("-", 1)
         if s[0].isdigit():
             return (int(s[0]), s[1])
 
@@ -57,8 +63,8 @@ def tag_compare(a, b):
     if b is None:
         return 1
 
-    a_parts = a.split('.')
-    b_parts = b.split('.')
+    a_parts = a.split(".")
+    b_parts = b.split(".")
 
     while 0 < len(a_parts) and 0 < len(b_parts):
         c = int_like_compare(a_parts[0], b_parts[0])
@@ -76,21 +82,18 @@ def tag_compare(a, b):
 
 def main():
     images = [
-        json.loads(x)
-        for x
-        in subprocess.check_output(['docker', 'images', '--format', '{{json .}}']).split(b'\n')
-        if x is not None and len(x) > 0
+        json.loads(x) for x in subprocess.check_output(["docker", "images", "--format", "{{json .}}"]).split(b"\n") if x is not None and len(x) > 0
     ]
 
     kills = []
     best = {}
 
     for image in images:
-        repo = image['Repository']
-        tag = image['Tag']
+        repo = image["Repository"]
+        tag = image["Tag"]
 
-        if '<none>' in (repo, tag):
-            kills.append(image['ID'])
+        if "<none>" in (repo, tag):
+            kills.append(image["ID"])
             continue
 
         best_tag = best.get(repo)
@@ -108,7 +111,7 @@ def main():
     for k in kills:
         print(k)
         try:
-            subprocess.check_call(['docker', 'rmi', k])
+            subprocess.check_call(["docker", "rmi", k])
             successes += 1
         except:
             failures += 1
@@ -118,5 +121,6 @@ def main():
     if failures > 0:
         print("Failed to delete %d images" % failures)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

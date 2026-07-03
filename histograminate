@@ -1,9 +1,16 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["numpy","matplotlib"]
+# ///
 
-import sys
 import argparse
+import sys
 
-import numpy
+import numpy as np
+import numpy.typing as npt
+
+type narrayf = npt.NDArray[np.floating]
 
 bin_funcs: set[str] = {"auto", "fd", "doane", "scott", "rice", "sturges", "sqrt"}
 
@@ -11,14 +18,12 @@ DEFAULT_HEIGHT = 1080
 DEFAULT_ASPECT = (16, 9)
 
 
-def parse_bins(v: str) -> "int | str":
+def parse_bins(v: str) -> "float | str":
     try:
-        return int(v)
+        return float(v)
     except ValueError:
-        if v not in bin_funcs:
-            raise argparse.ArgumentTypeError(
-                f"Cannot use {v!r} as a binning function. Available: {', '.join(sorted(bin_funcs))}"
-            )
+        if v not in bin_funcs and v != "range":
+            raise argparse.ArgumentTypeError(f"Cannot use {v!r} as a binning function. Available: {', '.join(sorted(bin_funcs))}")
         return v
 
 
@@ -35,10 +40,10 @@ def parse_aspect(v: str) -> "tuple[int, int]":
     return (w, h)
 
 
-def hist(nums: list, bins, density: bool):
-    h = numpy.histogram(nums, bins=bins, density=density)
+def hist(nums: list[float], bins: str | int | narrayf, density: bool) -> tuple[narrayf, narrayf]:
+    h = np.histogram(nums, bins=bins, density=density)
 
-    scale = 1.0
+    scale: float = 1.0
     # density is a probability density function, not a PMF; multiply by bin width
     # to normalize to 1. https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.histogram.html
     if density:
@@ -47,29 +52,42 @@ def hist(nums: list, bins, density: bool):
     return h[1], h[0] * scale
 
 
-def summarize(nums: list):
+def summarize(nums: list[float], scale: float):
+    for i in range(len(nums)):
+        nums[i] = nums[i] * scale
     pct_points = [0.0, 25.0, 50.0, 75.0, 90.0, 95.0, 99.0, 99.9, 100.0]
-    percentiles = numpy.percentile(nums, pct_points)
+    percentiles = np.percentile(nums, pct_points)
     for b, p in zip(pct_points, percentiles):
         print("{: 6}:{: 5}".format(b, p))
     print(" count: {}".format(len(nums)))
 
 
-def render_chart(edges, counts, cumulative: bool, out_file: str, width_px: int, height_px: int, xlabel: str = "Value", font_scale: float = 1.0, xlog: bool = False, ylog: bool = False):
+def render_chart(
+    edges: narrayf,
+    counts: narrayf,
+    cumulative: bool,
+    out_file: str,
+    width_px: int,
+    height_px: int,
+    xlabel: str = "Value",
+    font_scale: float = 1.0,
+    xlog: bool = False,
+    ylog: bool = False,
+):
     try:
         import matplotlib
         import matplotlib.lines
         import matplotlib.patches
         import matplotlib.ticker
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
-        sys.stderr.write("matplotlib is required for chart output: pip install matplotlib\n")
+        _ = sys.stderr.write("matplotlib is required for chart output: pip install matplotlib\n")
         sys.exit(1)
 
     if font_scale != 1.0:
-        for key in ("font.size", "axes.titlesize", "axes.labelsize",
-                    "xtick.labelsize", "ytick.labelsize", "legend.fontsize"):
+        for key in ("font.size", "axes.titlesize", "axes.labelsize", "xtick.labelsize", "ytick.labelsize", "legend.fontsize"):
             v = matplotlib.rcParams[key]
             if isinstance(v, (int, float)):
                 matplotlib.rcParams[key] = v * font_scale
@@ -84,7 +102,7 @@ def render_chart(edges, counts, cumulative: bool, out_file: str, width_px: int, 
             return f"{float(m):g}E{int(e)}"
         return s
 
-    bar_widths = numpy.diff(edges)
+    bar_widths = np.diff(edges)
     bar_color = "#4c72b0"
     ax.bar(edges[:-1], counts, width=bar_widths, align="edge", edgecolor="none", color=bar_color, label="Count")
     ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(fmt_x))
@@ -97,7 +115,7 @@ def render_chart(edges, counts, cumulative: bool, out_file: str, width_px: int, 
 
     if cumulative:
         total = counts.sum()
-        cum_pct = numpy.cumsum(counts) / total * 100.0
+        cum_pct = np.cumsum(counts) / total * 100.0
         # Use bin midpoints so the line sits centered over each bar
         midpoints = edges[:-1] + bar_widths / 2
 
@@ -119,42 +137,90 @@ def render_chart(edges, counts, cumulative: bool, out_file: str, width_px: int, 
     plt.close(fig)
 
 
-def resolve_dimensions(width, height, aspect):
+def resolve_dimensions(width: int, height: int, aspect: tuple[float, float]) -> tuple[int, int]:
     ar_w, ar_h = aspect or DEFAULT_ASPECT
     ratio = ar_w / ar_h
 
     if width and height:
         return width, height
     if width:
-        return width, round(width / ratio)
+        return width, int(round(width / ratio))
     if height:
-        return round(height * ratio), height
+        return int(round(height * ratio)), height
     h = DEFAULT_HEIGHT
-    return round(h * ratio), h
+    return int(round(h * ratio)), h
+
+
+def resolve_bins(inbins: str | list[str | float], xscale: float) -> str | int | narrayf:
+    if isinstance(inbins, str):
+        return inbins
+    if len(inbins) == 0:
+        raise RuntimeError("no specified bins")
+    if len(inbins) == 1:
+        if isinstance(inbins[0], float):
+            return int(inbins[0])
+        else:
+            return inbins[0]
+
+    bins: narrayf
+    if inbins[0] == "range":
+        rparams = list(map(float, inbins[1:]))
+        if len(rparams) == 1:
+            bins = np.arange(0.0, rparams[0] + 1, dtype=np.float64)
+        elif len(rparams) == 2:
+            bins = np.arange(rparams[0], rparams[1] + 1, dtype=np.float64)
+        elif len(rparams) == 3:
+            bins = np.arange(rparams[0], rparams[1] + 1, rparams[2], dtype=np.float64)
+        else:
+            raise RuntimeError("invalid range for bins: " + ",".join(map(str, rparams)))
+    else:
+        bins = np.array(map(float, inbins), dtype=np.float64)
+    if xscale != 1.0:
+        # we need to "undo" scaling before calculating the histogram
+        bins = bins / xscale
+
+    return bins
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Histogram tool")
-    parser.add_argument("-s", "--stats", action="store_true", help="Show summary statistics")
-    parser.add_argument("-n", "--normalized", action="store_true", help="Normalize histogram (density)")
-    parser.add_argument("-c", "--cumulative", action="store_true", help="Cumulative histogram")
-    parser.add_argument(
-        "bins", nargs="?", default="auto", type=parse_bins,
+    parser = argparse.ArgumentParser(
+        prog="histograminate",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""The bins can be specified in 4 ways:
+ 1. Bin algorithm supported by numpy.histogram (e.g. sturges)
+ 2. Count of bins (e.g. 10)
+ 3. List of bins (e.g. 1 2 3 5 8 13)
+ 4. Range based on numpy.arange (e.g. range 1 10 2)
+   * parameters are [start], stop, [step]
+
+see:
+ * https://numpy.org/doc/stable/reference/generated/numpy.histogram.html
+ * https://numpy.org/doc/stable/reference/generated/numpy.histogram_bin_edges.html
+ * https://numpy.org/doc/stable/reference/generated/numpy.arange.html""",
+    )
+    _ = parser.add_argument("-s", "--stats", action="store_true", help="Show summary statistics")
+    _ = parser.add_argument("-n", "--normalized", action="store_true", help="Normalize histogram (density)")
+    _ = parser.add_argument("-c", "--cumulative", action="store_true", help="Cumulative histogram")
+    _ = parser.add_argument(
+        "bins",
+        nargs="*",
+        default="auto",
+        type=parse_bins,
         help="Number of bins or binning function (default: auto)",
     )
-    parser.add_argument("-o", "--out", metavar="FILE", help="Write chart to FILE (.png or .svg)")
-    parser.add_argument("--xlabel", default="Value", metavar="LABEL", help="X-axis title (default: Value)")
-    parser.add_argument("--xscale", type=float, default=1.0, metavar="FACTOR", help="Multiply bucket edges by FACTOR before display")
-    parser.add_argument("--font-scale", type=float, default=2.0, metavar="FACTOR", help="Scale all font sizes by FACTOR (default: 2.0)")
-    parser.add_argument("--xlog", action="store_true", help="Log10 scale on X axis")
-    parser.add_argument("--ylog", action="store_true", help="Log10 scale on Y axis")
-    parser.add_argument("--width", type=int, metavar="PX", help="Chart width in pixels")
-    parser.add_argument("--height", type=int, metavar="PX", help="Chart height in pixels (default: 1080)")
-    parser.add_argument("--aspect", type=parse_aspect, metavar="W:H", help="Aspect ratio (default: 16:9)")
+    _ = parser.add_argument("-o", "--out", metavar="FILE", help="Write chart to FILE (.png or .svg)")
+    _ = parser.add_argument("--xlabel", default="Value", metavar="LABEL", help="X-axis title (default: Value)")
+    _ = parser.add_argument("--xscale", type=float, default=1.0, metavar="FACTOR", help="Multiply bucket edges by FACTOR before display")
+    _ = parser.add_argument("--font-scale", type=float, default=2.0, metavar="FACTOR", help="Chart: Scale all font sizes by FACTOR (default: 2.0)")
+    _ = parser.add_argument("--xlog", action="store_true", help="Chart: Log10 scale on X axis")
+    _ = parser.add_argument("--ylog", action="store_true", help="Chart: Log10 scale on Y axis")
+    _ = parser.add_argument("--width", type=int, metavar="PX", help="Chart: Width in pixels")
+    _ = parser.add_argument("--height", type=int, metavar="PX", help="Chart: Height in pixels (default: 1080)")
+    _ = parser.add_argument("--aspect", type=parse_aspect, metavar="W:H", help="Chart: Aspect ratio (default: 16:9)")
 
     args = parser.parse_args()
 
-    nums = []
+    nums: list[float] = []
     for line in sys.stdin:
         try:
             nums.append(float(line.strip()))
@@ -162,18 +228,30 @@ def main():
             pass
 
     if args.stats:
-        summarize(nums)
+        summarize(nums, args.xscale)
         return
 
-    edges, counts = hist(nums, args.bins, args.normalized)
+    bins = resolve_bins(args.bins, args.xscale)
+    edges, counts = hist(nums, bins, args.normalized)
     edges = edges * args.xscale
 
     if args.out:
         w, h = resolve_dimensions(args.width, args.height, args.aspect)
-        render_chart(edges, counts, args.cumulative, args.out, w, h, xlabel=args.xlabel, font_scale=args.font_scale, xlog=args.xlog, ylog=args.ylog)
+        render_chart(
+            edges,
+            counts,
+            args.cumulative,
+            args.out,
+            w,
+            h,
+            xlabel=args.xlabel,
+            font_scale=args.font_scale,
+            xlog=args.xlog,
+            ylog=args.ylog,
+        )
     else:
         if args.cumulative:
-            counts = numpy.cumsum(counts)
+            counts = np.cumsum(counts)
         for x in range(len(counts)):
             print("%f\t%f" % (edges[x], counts[x]))
 
