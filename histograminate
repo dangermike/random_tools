@@ -53,13 +53,17 @@ def hist(nums: list[float], bins: str | int | narrayf, density: bool) -> tuple[n
 
 
 def summarize(nums: list[float], scale: float):
+    total = 0
     for i in range(len(nums)):
         nums[i] = nums[i] * scale
+        total += nums[i] * scale
     pct_points = [0.0, 25.0, 50.0, 75.0, 90.0, 95.0, 99.0, 99.9, 100.0]
     percentiles = np.percentile(nums, pct_points)
     for b, p in zip(pct_points, percentiles):
         print("{: 6}:{: 5}".format(b, p))
     print(" count: {}".format(len(nums)))
+    print(" total: {}".format(total))
+    print(" average: {}".format(total / len(nums)))
 
 
 def render_chart(
